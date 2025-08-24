@@ -1,7 +1,7 @@
 const { Telegraf, Markup } = require('telegraf');
 const db = require('./db');
 
-const BOT_TOKEN = process.env.BOT_TOKEN || "8107398523:AAHtOK9ZB53ONfgXaGrNclKQLX995R6PLKA";
+const BOT_TOKEN = process.env.BOT_TOKEN;
 if (!BOT_TOKEN) throw new Error('Set BOT_TOKEN env var');
 
 const bot = new Telegraf(BOT_TOKEN);
