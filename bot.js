@@ -1,12 +1,12 @@
 const { Telegraf, Markup } = require('telegraf');
-const BOT_TOKEN = "8107398523:AAHtOK9ZB53ONfgXaGrNclKQLX995R6PLKA";
+const db = require('./db');
+
+const BOT_TOKEN = process.env.BOT_TOKEN || "8107398523:AAHtOK9ZB53ONfgXaGrNclKQLX995R6PLKA";
 if (!BOT_TOKEN) throw new Error('Set BOT_TOKEN env var');
 
 const bot = new Telegraf(BOT_TOKEN);
 
-// Простой лидерборд в памяти процесса (для демо без внешних сервисов)
-const scores = new Map(); // userId -> { name, best }
-
+// старт
 bot.start((ctx) => {
   return ctx.reply(
     'Conf Runner 🎮 Запускай игру!',
@@ -17,41 +17,51 @@ bot.start((ctx) => {
   );
 });
 
-// принимаем данные из Mini App: ctx.message.web_app_data.data (string)
+// принимаем результаты из игры
 bot.on('message', async (ctx) => {
   const data = ctx.message?.web_app_data?.data;
-  if (!data) return; // обычные сообщения игнорируем
+  if (!data) return;
 
   try {
-    const payload = JSON.parse(data); // { game, score, ts }
+    const payload = JSON.parse(data); // { score: 123 }
     const score = Math.max(0, Number(payload.score) || 0);
     const uid = ctx.from.id;
-    const name = `${ctx.from.first_name ?? ''} ${ctx.from.last_name ?? ''}`.trim() || ctx.from.username || `id${uid}`;
+    const name =
+      `${ctx.from.first_name ?? ''} ${ctx.from.last_name ?? ''}`.trim() ||
+      ctx.from.username ||
+      `id${uid}`;
 
-    const prev = scores.get(uid)?.best ?? -Infinity;
-    if (score > prev) scores.set(uid, { name, best: score });
+    const row = db.prepare('SELECT best FROM scores WHERE userId = ?').get(uid);
+
+    if (!row) {
+      db.prepare('INSERT INTO scores (userId, name, best) VALUES (?, ?, ?)').run(uid, name, score);
+    } else if (score > row.best) {
+      db.prepare('UPDATE scores SET best = ?, name = ? WHERE userId = ?').run(score, name, uid);
+    }
 
     await ctx.reply(`✅ Результат принят: ${score} очков!`);
   } catch (e) {
+    console.error(e);
     await ctx.reply('❌ Не удалось прочитать результат.');
   }
 });
 
+// топ-10
 bot.action('show_top', (ctx) => {
-  const top = [...scores.values()].sort((a,b) => b.best - a.best).slice(0,10);
+  const top = db.prepare('SELECT name, best FROM scores ORDER BY best DESC LIMIT 10').all();
   if (!top.length) return ctx.answerCbQuery('Пока нет результатов');
 
-  const text = top.map((r,i)=> `${i+1}. ${r.name} — ${r.best}`).join('\n');
+  const text = top.map((r, i) => `${i + 1}. ${r.name} — ${r.best}`).join('\n');
   ctx.reply(`🏆 Топ-10 Conf Runner:\n${text}`);
   ctx.answerCbQuery();
 });
 
 bot.command('top', (ctx) => {
-  const top = [...scores.values()].sort((a,b) => b.best - a.best).slice(0,10);
+  const top = db.prepare('SELECT name, best FROM scores ORDER BY best DESC LIMIT 10').all();
   if (!top.length) return ctx.reply('Пока нет результатов. Нажми «Играть».');
-  const text = top.map((r,i)=> `${i+1}. ${r.name} — ${r.best}`).join('\n');
+  const text = top.map((r, i) => `${i + 1}. ${r.name} — ${r.best}`).join('\n');
   ctx.reply(`🏆 Топ-10 Conf Runner:\n${text}`);
 });
 
 bot.launch();
-console.log('Bot started');
+console.log('Bot started with SQLite DB');
