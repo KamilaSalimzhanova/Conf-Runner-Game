@@ -1,203 +1,195 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
-  <title>Conf Runner Game</title>
-  <style>
-    :root {
-      --bg: #f0f4f8;
-      --fg: #111827;
-      --card: #ffffff;
-      --line: #cbd5e1;
-      --accent: #2563eb;
-    }
-    * { box-sizing: border-box; }
-    body {
-      margin: 0;
-      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
-      background: var(--bg);
-      color: var(--fg);
-      overflow: hidden;
-    }
-    .wrap {
-      position: absolute;
-      top: 10px; left: 50%;
-      transform: translateX(-50%);
-      display: flex;
-      gap: 8px;
-      align-items: center;
-      z-index: 10;
-    }
-    .badge {
-      background: var(--card); border: 1px solid var(--line);
-      padding: 8px 12px; border-radius: 12px; font-weight: 700;
-    }
-    .btn {
-      appearance: none; border: 1px solid var(--line); background: var(--card);
-      padding: 8px 12px; border-radius: 12px; cursor: pointer; font-weight: 700;
-    }
-    .btn:active { transform: translateY(1px); }
-    canvas {
-      display: block;
-      background: linear-gradient(#fff, #eef3f8 60%);
-      touch-action: manipulation;
-    }
-    .hint {
-      position: absolute;
-      bottom: 10px; left: 50%;
-      transform: translateX(-50%);
-      opacity: 0.7;
-      font-size: 14px;
-      z-index: 10;
-    }
-  </style>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+<title>Conf Runner Game</title>
+<style>
+  :root {
+    --bg: #f0f4f8;
+    --fg: #111827;
+    --card: #ffffff;
+    --line: #cbd5e1;
+    --accent: #2563eb;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+    background: var(--bg);
+    color: var(--fg);
+    overflow: hidden;
+  }
+  .wrap {
+    position: absolute;
+    top: 10px; left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    gap: 8px;
+    align-items: center;
+    z-index: 10;
+  }
+  .badge {
+    background: var(--card); border: 1px solid var(--line);
+    padding: 8px 12px; border-radius: 12px; font-weight: 700;
+  }
+  .btn {
+    appearance: none; border: 1px solid var(--line); background: var(--card);
+    padding: 8px 12px; border-radius: 12px; cursor: pointer; font-weight: 700;
+  }
+  .btn:active { transform: translateY(1px); }
+  canvas { display: block; background: linear-gradient(#fff, #eef3f8 60%); touch-action: manipulation; }
+  .hint {
+    position: absolute;
+    bottom: 10px; left: 50%;
+    transform: translateX(-50%);
+    opacity: 0.7;
+    font-size: 14px;
+    z-index: 10;
+  }
+</style>
 </head>
 <body>
-  <div class="wrap">
-    <div id="score" class="badge">Очки: 0</div>
-    <button id="startBtn" class="btn">▶️ Старт</button>
-    <button id="pauseBtn" class="btn">⏸ Пауза</button>
-    <button id="sendBtn" class="btn">📤 Отправить результат</button>
-  </div>
-  <canvas id="game"></canvas>
-  <div class="hint">Управление: Space/↑ или ТАП/свайп вверх — прыжок. Собирай 🍪 ☕ 🍩 🍫 → +1. Баг 🐞 → −1. Игра ускоряется.</div>
+<div class="wrap">
+  <div id="score" class="badge">Очки: 0</div>
+  <button id="startBtn" class="btn">▶️ Старт</button>
+  <button id="pauseBtn" class="btn">⏸ Пауза</button>
+  <button id="sendBtn" class="btn">📤 Отправить результат</button>
+</div>
+<canvas id="game"></canvas>
+<div class="hint">Управление: Space/↑ или ТАП/свайп вверх — прыжок. Собирай 🍪 ☕ 🍩 🍫 → +1. Баг 🐞 → −1. Игра ускоряется.</div>
 
-  <script>
-    const TG = window.Telegram?.WebApp;
-    if(TG){ try{ TG.ready(); TG.expand(); }catch(e){} }
+<script>
+const TG = window.Telegram?.WebApp;
+if(TG){ try{ TG.ready(); TG.expand(); }catch(e){} }
 
-    const canvas = document.getElementById('game');
-    const ctx = canvas.getContext('2d');
+const canvas = document.getElementById('game');
+const ctx = canvas.getContext('2d');
 
-    let W, H, groundY;
+let W, H, groundY;
 
-    function resizeCanvas(){
-      W = window.innerWidth;
-      H = window.innerHeight;
-      canvas.width = W;
-      canvas.height = H;
-      groundY = H - H*0.1;
-      resizeRunner();
+function resizeCanvas(){
+  W = window.innerWidth;
+  H = window.innerHeight;
+  canvas.width = W;
+  canvas.height = H;
+  groundY = H*0.9; // земля на 90% высоты
+  resizeRunner();
+}
+
+window.addEventListener('resize', resizeCanvas);
+resizeCanvas();
+
+const scoreEl = document.getElementById('score');
+const startBtn = document.getElementById('startBtn');
+const pauseBtn = document.getElementById('pauseBtn');
+const sendBtn  = document.getElementById('sendBtn');
+
+const runnerImg = new Image();
+runnerImg.src = 'assets/runner.png';
+
+const STATE = { STOP:0, RUN:1, PAUSE:2 };
+let state = STATE.STOP;
+let score = 0;
+let lastTime = 0;
+
+const runner = { x:0, y:0, w:0, h:0, vy:0, gravity:0.02, jumpForce:0, onGround:true, bobT:0 };
+
+function resizeRunner(){
+  runner.w = W*0.08;
+  runner.h = H*0.22;
+  runner.x = W*0.1;
+  runner.y = groundY - runner.h;
+  runner.jumpForce = -H*0.05;
+  runner.gravity = H*0.0025;
+}
+
+const world = { speed: W*0.006, accel:0.0009, spawnEvery:1000, minSpawn:520, lastSpawn:0, time:0 };
+const goodies = ['🍪','☕','🍩','🍫','🥐','🧃','🎧','🍬'];
+const items = [];
+
+function spawnItem(){
+  const isBug = Math.random()<0.42;
+  const size = isBug? H*0.08 : H*0.07;
+  const y = isBug ? (groundY - size) : (Math.random()<0.6 ? groundY - size - H*0.06 : groundY - size - H*0.25);
+  items.push({ type:isBug?'bug':'good', emoji:isBug?'🐞':goodies[Math.floor(Math.random()*goodies.length)], x:W+20, y, w:size, h:size });
+}
+
+function jump(){
+  if(state!==STATE.RUN) return;
+  if(runner.onGround){ runner.vy=runner.jumpForce; runner.onGround=false; TG?.HapticFeedback?.impactOccurred?.('light'); }
+}
+
+document.addEventListener('keydown', e=>{ if(e.code==='Space'||e.code==='ArrowUp'){ e.preventDefault(); jump(); } });
+
+let touchStartY=0,touchStartX=0;
+canvas.addEventListener('touchstart', e=>{ const t=e.changedTouches[0]; touchStartY=t.clientY; touchStartX=t.clientX; }, {passive:true});
+canvas.addEventListener('touchend', e=>{ 
+  const t=e.changedTouches[0]; 
+  const dy=t.clientY-touchStartY, dx=t.clientX-touchStartX;
+  if(Math.abs(dy)<30 && Math.abs(dx)<30) jump();
+  else if(dy<-30 && Math.abs(dy)>Math.abs(dx)) jump();
+}, {passive:true});
+
+startBtn.onclick = ()=>{ if(state!==STATE.RUN){ state=STATE.RUN; lastTime=performance.now(); requestAnimationFrame(loop); }};
+pauseBtn.onclick = ()=>{ if(state===STATE.RUN) state=STATE.PAUSE; else if(state===STATE.PAUSE){ state=STATE.RUN; lastTime=performance.now(); requestAnimationFrame(loop); }};
+sendBtn.onclick = ()=>sendScore(score);
+
+function hit(ax,ay,aw,ah,bx,by,bw,bh){ return ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by; }
+
+function update(dt){
+  world.time+=dt;
+  world.speed+=world.accel*dt;
+  if(world.spawnEvery>world.minSpawn) world.spawnEvery-=0.006*dt;
+  if(world.time-world.lastSpawn>world.spawnEvery){ spawnItem(); world.lastSpawn=world.time; }
+
+  runner.y+=runner.vy*dt;
+  if(!runner.onGround) runner.vy+=runner.gravity*dt;
+  if(runner.y>=groundY-runner.h){ runner.y=groundY-runner.h; runner.vy=0; runner.onGround=true; }
+  runner.bobT+=dt*0.01;
+
+  for(let i=items.length-1;i>=0;i--){
+    const it=items[i]; it.x-=world.speed*dt;
+    const px=runner.x+runner.w*0.12, py=runner.y+runner.h*0.07, pw=runner.w*0.76, ph=runner.h*0.86;
+    if(hit(px,py,pw,ph,it.x,it.y,it.w,it.h)){
+      if(it.type==='good'){ score+=1; TG?.HapticFeedback?.notificationOccurred?.('success'); }
+      else{ TG?.HapticFeedback?.notificationOccurred?.('error'); gameOver(); }
+      items.splice(i,1); scoreEl.textContent='Очки: '+score; continue;
     }
+    if(it.x<-80) items.splice(i,1);
+  }
+}
 
-    window.addEventListener('resize', resizeCanvas);
-    resizeCanvas();
+function draw(){
+  ctx.clearRect(0,0,W,H);
+  ctx.globalAlpha=0.06;
+  for(let i=0;i<H;i+=24){ ctx.fillStyle=i%48===0?'#64748b':'#334155'; ctx.fillRect(0,i,W,24);}
+  ctx.globalAlpha=1;
+  ctx.strokeStyle='#0f172a'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(0,groundY); ctx.lineTo(W,groundY); ctx.stroke();
+  ctx.globalAlpha=0.15; for(let i=0;i<W;i+=40){ ctx.fillStyle='#0f172a'; ctx.fillRect(i,groundY+0.025*H,24,4); } ctx.globalAlpha=1;
+  ctx.font = Math.floor(H*0.07)+'px system-ui, serif';
+  for(const it of items){ ctx.fillText(it.emoji,it.x,it.y+it.h-4); if(it.type==='bug'){ ctx.globalAlpha=0.08; ctx.fillStyle='#ef4444'; ctx.fillRect(it.x,it.y,it.w,it.h); ctx.globalAlpha=1; } }
+  const bob=Math.sin(runner.bobT)*(runner.onGround?1.5:0);
+  ctx.drawImage(runnerImg, runner.x, runner.y+bob, runner.w, runner.h);
+}
 
-    const scoreEl = document.getElementById('score');
-    const startBtn = document.getElementById('startBtn');
-    const pauseBtn = document.getElementById('pauseBtn');
-    const sendBtn  = document.getElementById('sendBtn');
+function loop(now){ if(state!==STATE.RUN) return; const dt=Math.min(50,now-lastTime); lastTime=now; update(dt); draw(); requestAnimationFrame(loop); }
 
-    const runnerImg = new Image();
-    runnerImg.src = 'assets/runner.png';
+function gameOver(){
+  state=STATE.STOP;
+  ctx.fillStyle='rgba(0,0,0,0.6)';
+  ctx.fillRect(0,0,W,H);
+  ctx.fillStyle='#fff'; ctx.font=Math.floor(H*0.06)+'px system-ui'; ctx.textAlign='center';
+  ctx.fillText('🐞 Баг! Игра окончена.', W/2,H/2);
+}
 
-    const STATE = { STOP:0, RUN:1, PAUSE:2 };
-    let state = STATE.STOP;
-    let score = 0;
-    let lastTime = 0;
+function sendScore(value){
+  if(!TG){ alert('Score: '+value); return; }
+  try{ TG.HapticFeedback?.impactOccurred?.('medium'); TG.sendData(JSON.stringify({game:'conf_runner',score:value,ts:Date.now()})); }catch(e){}
+}
 
-    const runner = {
-      x:0, y:0, w:0, h:0, vy:0, gravity:0.95, jumpForce:-18, onGround:true, bobT:0
-    };
-
-    function resizeRunner(){
-      runner.w = W*0.08;
-      runner.h = H*0.22;
-      runner.x = W*0.1;
-      runner.y = groundY - runner.h;
-      runner.jumpForce = -H*0.05;
-    }
-
-    const world = {
-      speed: W*0.006, accel:0.0009, spawnEvery:1000, minSpawn:520, lastSpawn:0, time:0
-    };
-
-    const goodies = ['🍪','☕','🍩','🍫','🥐','🧃','🎧','🍬'];
-    const items = [];
-
-    function spawnItem(){
-      const isBug = Math.random()<0.42;
-      const size = isBug ? H*0.08 : H*0.07;
-      const y = isBug ? (groundY - size) : (Math.random()<0.6 ? groundY - size - H*0.06 : groundY - size - H*0.25);
-      items.push({ type:isBug?'bug':'good', emoji:isBug?'🐞':goodies[Math.floor(Math.random()*goodies.length)], x:W+20, y, w:size, h:size });
-    }
-
-    function jump(){
-      if(state!==STATE.RUN) return;
-      if(runner.onGround){ runner.vy=runner.jumpForce; runner.onGround=false; TG?.HapticFeedback?.impactOccurred?.('light'); }
-    }
-
-    document.addEventListener('keydown', e=>{ if(e.code==='Space'||e.code==='ArrowUp'){ e.preventDefault(); jump(); } });
-
-    let touchStartY=0,touchStartX=0;
-    canvas.addEventListener('touchstart', e=>{ const t=e.changedTouches[0]; touchStartY=t.clientY; touchStartX=t.clientX; }, {passive:true});
-    canvas.addEventListener('touchend', e=>{ 
-      const t=e.changedTouches[0]; 
-      const dy=t.clientY-touchStartY, dx=t.clientX-touchStartX;
-      if(Math.abs(dy)<30 && Math.abs(dx)<30) jump();
-      else if(dy<-30 && Math.abs(dy)>Math.abs(dx)) jump();
-    }, {passive:true});
-
-    startBtn.onclick = ()=>{ if(state!==STATE.RUN){ state=STATE.RUN; lastTime=performance.now(); requestAnimationFrame(loop); }};
-    pauseBtn.onclick = ()=>{ if(state===STATE.RUN) state=STATE.PAUSE; else if(state===STATE.PAUSE){ state=STATE.RUN; lastTime=performance.now(); requestAnimationFrame(loop); }};
-    sendBtn.onclick = ()=>sendScore(score);
-
-    function hit(ax,ay,aw,ah,bx,by,bw,bh){ return ax<bx+bw && ax+aw>bx && ay<by+bh && ay+ah>by; }
-
-    function update(dt){
-      world.time+=dt;
-      world.speed+=world.accel*dt;
-      if(world.spawnEvery>world.minSpawn) world.spawnEvery-=0.006*dt;
-      if(world.time-world.lastSpawn>world.spawnEvery){ spawnItem(); world.lastSpawn=world.time; }
-
-      runner.y+=runner.vy;
-      if(!runner.onGround) runner.vy+=runner.gravity;
-      if(runner.y>=groundY-runner.h){ runner.y=groundY-runner.h; runner.vy=0; runner.onGround=true; }
-      runner.bobT+=dt*0.01;
-
-      for(let i=items.length-1;i>=0;i--){
-        const it=items[i]; it.x-=world.speed*dt;
-        const px=runner.x+runner.w*0.12, py=runner.y+runner.h*0.07, pw=runner.w*0.76, ph=runner.h*0.86;
-        if(hit(px,py,pw,ph,it.x,it.y,it.w,it.h)){
-          if(it.type==='good'){ score+=1; TG?.HapticFeedback?.notificationOccurred?.('success'); }
-          else{ TG?.HapticFeedback?.notificationOccurred?.('error'); gameOver(); }
-          items.splice(i,1); scoreEl.textContent='Очки: '+score; continue;
-        }
-        if(it.x<-80) items.splice(i,1);
-      }
-    }
-
-    function draw(){
-      ctx.clearRect(0,0,W,H);
-      ctx.globalAlpha=0.06;
-      for(let i=0;i<H;i+=24){ ctx.fillStyle=i%48===0?'#64748b':'#334155'; ctx.fillRect(0,i,W,24);}
-      ctx.globalAlpha=1;
-      ctx.strokeStyle='#0f172a'; ctx.lineWidth=2;
-      ctx.beginPath(); ctx.moveTo(0,groundY); ctx.lineTo(W,groundY); ctx.stroke();
-      ctx.globalAlpha=0.15; for(let i=0;i<W;i+=40){ ctx.fillStyle='#0f172a'; ctx.fillRect(i,groundY+10,24,4); } ctx.globalAlpha=1;
-      ctx.font = Math.floor(H*0.07)+'px system-ui, serif';
-      for(const it of items){ ctx.fillText(it.emoji,it.x,it.y+it.h-4); if(it.type==='bug'){ ctx.globalAlpha=0.08; ctx.fillStyle='#ef4444'; ctx.fillRect(it.x,it.y,it.w,it.h); ctx.globalAlpha=1; } }
-      const bob=Math.sin(runner.bobT)*(runner.onGround?1.5:0);
-      ctx.drawImage(runnerImg, runner.x, runner.y+bob, runner.w, runner.h);
-    }
-
-    function loop(now){ if(state!==STATE.RUN) return; const dt=Math.min(50,now-lastTime); lastTime=now; update(dt); draw(); requestAnimationFrame(loop); }
-
-    function gameOver(){
-      state=STATE.STOP;
-      ctx.fillStyle='rgba(0,0,0,0.6)';
-      ctx.fillRect(0,0,W,H);
-      ctx.fillStyle='#fff'; ctx.font='36px system-ui'; ctx.textAlign='center';
-      ctx.fillText('🐞 Баг! Игра окончена.', W/2,H/2);
-    }
-
-    function sendScore(value){
-      if(!TG){ alert('Score: '+value); return; }
-      try{ TG.HapticFeedback?.impactOccurred?.('medium'); TG.sendData(JSON.stringify({game:'conf_runner',score:value,ts:Date.now()})); }catch(e){}
-    }
-
-    runnerImg.onload = ()=>{ scoreEl.textContent='Очки: '+score; };
-  </script>
+runnerImg.onload = ()=>{ scoreEl.textContent='Очки: '+score; };
+</script>
 </body>
 </html>
