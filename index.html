@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <title>Конфа-гонка 🏃‍♂️</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <style>
+    body {
+      margin: 0;
+      overflow: hidden;
+      background: #f5f5f5;
+      font-family: sans-serif;
+      touch-action: none; /* чтобы свайпы ловились */
+    }
+    canvas {
+      display: block;
+      margin: 0 auto;
+      background: #eee;
+    }
+    #score {
+      position: absolute;
+      top: 10px;
+      left: 10px;
+      font-size: 18px;
+      background: rgba(255,255,255,0.8);
+      padding: 6px 12px;
+      border-radius: 8px;
+    }
+    #gameOver {
+      position: absolute;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background: white;
+      padding: 20px 30px;
+      border-radius: 12px;
+      box-shadow: 0 4px 12px rgba(0,0,0,0.2);
+      display: none;
+      text-align: center;
+    }
+    button {
+      margin-top: 10px;
+      padding: 8px 16px;
+      border: none;
+      background: #0077ff;
+      color: white;
+      font-size: 16px;
+      border-radius: 8px;
+      cursor: pointer;
+    }
+  </style>
+</head>
+<body>
+  <div id="score">Очки: 0</div>
+  <div id="gameOver">
+    <h2>Игра окончена 💥</h2>
+    <p id="finalScore"></p>
+    <button onclick="restartGame()">Сыграть ещё</button>
+  </div>
+  <canvas id="game" width="400" height="600"></canvas>
+
+  <script>
+    const canvas = document.getElementById("game");
+    const ctx = canvas.getContext("2d");
+    const scoreDiv = document.getElementById("score");
+    const gameOverDiv = document.getElementById("gameOver");
+    const finalScoreP = document.getElementById("finalScore");
+
+    let player, objects, score, gameSpeed, gravity, jumpPower, isGameOver;
+
+    function init() {
+      player = { x: 50, y: 500, w: 40, h: 50, vy: 0, onGround: true, legSwap: false };
+      objects = [];
+      score = 0;
+      gameSpeed = 3;
+      gravity = 0.5;
+      jumpPower = -10;
+      isGameOver = false;
+      gameOverDiv.style.display = "none";
+      loop();
+    }
+
+    function drawPlayer() {
+      // тело
+      ctx.fillStyle = "#0077ff";
+      ctx.fillRect(player.x, player.y, player.w, player.h);
+
+      // голова
+      ctx.fillStyle = "#ffe0bd";
+      ctx.beginPath();
+      ctx.arc(player.x + 20, player.y - 10, 12, 0, Math.PI * 2);
+      ctx.fill();
+
+      // ноут
+      ctx.fillStyle = "#555";
+      ctx.fillRect(player.x + 25, player.y + 5, 20, 15);
+
+      // рюкзак
+      ctx.fillStyle = "#ff9933";
+      ctx.fillRect(player.x - 15, player.y + 5, 15, 25);
+
+      // ноги (простая анимация)
+      ctx.strokeStyle = "black";
+      ctx.lineWidth = 3;
+      ctx.beginPath();
+      if (player.legSwap) {
+        ctx.moveTo(player.x + 10, player.y + player.h);
+        ctx.lineTo(player.x, player.y + player.h + 15);
+        ctx.moveTo(player.x + 30, player.y + player.h);
+        ctx.lineTo(player.x + 40, player.y + player.h + 15);
+      } else {
+        ctx.moveTo(player.x + 10, player.y + player.h);
+        ctx.lineTo(player.x + 10, player.y + player.h + 15);
+        ctx.moveTo(player.x + 30, player.y + player.h);
+        ctx.lineTo(player.x + 30, player.y + player.h + 15);
+      }
+      ctx.stroke();
+    }
+
+    function spawnObject() {
+      const isBug = Math.random() < 0.3;
+      const emojis = ["🍪","☕","🍫","🍩","🥐","🧃","🎧","🍬"];
+      const obj = {
+        x: canvas.width,
+        y: 540,
+        size: 30,
+        type: isBug ? "bug" : "bonus",
+        emoji: isBug ? "🐞" : emojis[Math.floor(Math.random()*emojis.length)]
+      };
+      objects.push(obj);
+    }
+
+    function update() {
+      player.y += player.vy;
+      player.vy += gravity;
+      if (player.y >= 500) {
+        player.y = 500;
+        player.vy = 0;
+        player.onGround = true;
+      } else {
+        player.onGround = false;
+      }
+
+      objects.forEach(o => o.x -= gameSpeed);
+      objects = objects.filter(o => o.x + o.size > 0);
+
+      objects.forEach(o => {
+        if (
+          player.x < o.x + o.size &&
+          player.x + player.w > o.x &&
+          player.y < o.y + o.size &&
+          player.y + player.h > o.y
+        ) {
+          if (o.type === "bug") {
+            endGame();
+          } else {
+            score += 10;
+            objects = objects.filter(obj => obj !== o);
+          }
+        }
+      });
+
+      score++;
+      gameSpeed += 0.001;
+      if (Math.floor(score) % 100 === 0) player.legSwap = !player.legSwap;
+    }
+
+    function draw() {
+      ctx.clearRect(0,0,canvas.width,canvas.height);
+      drawPlayer();
+      objects.forEach(o => ctx.fillText(o.emoji, o.x, o.y));
+      scoreDiv.textContent = "Очки: " + score;
+    }
+
+    function loop() {
+      if (isGameOver) return;
+      update();
+      draw();
+      if (Math.random() < 0.02) spawnObject();
+      requestAnimationFrame(loop);
+    }
+
+    function jump() {
+      if (player.onGround) {
+        player.vy = jumpPower;
+      }
+    }
+
+    function endGame() {
+      isGameOver = true;
+      finalScoreP.textContent = "Твой счёт: " + score;
+      gameOverDiv.style.display = "block";
+
+      if (window.Telegram && Telegram.WebApp) {
+        Telegram.WebApp.sendData(String(score));
+      }
+    }
+
+    function restartGame() {
+      init();
+    }
+
+    // управление с клавиатуры
+    document.addEventListener("keydown", e => {
+      if (e.code === "Space" || e.code === "ArrowUp") jump();
+      if (e.code === "ArrowDown") {
+        // заготовка для приседания
+      }
+    });
+
+    // управление касаниями
+    let touchStartY = 0;
+    document.addEventListener("touchstart", e => {
+      touchStartY = e.changedTouches[0].clientY;
+    });
+
+    document.addEventListener("touchend", e => {
+      const dy = e.changedTouches[0].clientY - touchStartY;
+      if (Math.abs(dy) < 30) {
+        // тап
+        jump();
+      } else if (dy < -30) {
+        // свайп вверх
+        jump();
+      } else if (dy > 30) {
+        // свайп вниз (пока не используем)
+      }
+    });
+
+    init();
+  </script>
+</body>
+</html>
