@@ -1,5 +1,5 @@
 const { Telegraf, Markup } = require('telegraf');
-const BOT_TOKEN = process.env.BOT_TOKEN; // токен из @BotFather
+const BOT_TOKEN = "8107398523:AAHtOK9ZB53ONfgXaGrNclKQLX995R6PLKA";
 if (!BOT_TOKEN) throw new Error('Set BOT_TOKEN env var');
 
 const bot = new Telegraf(BOT_TOKEN);
