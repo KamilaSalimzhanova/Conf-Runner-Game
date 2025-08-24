@@ -200,13 +200,19 @@
 
         // Столкновение с хитбоксом игрока (немного уже, чтобы честнее)
         const px = runner.x + 10, py = runner.y + 6, pw = runner.w - 20, ph = runner.h - 10;
-        if (hit(px,py,pw,ph, it.x,it.y,it.w,it.h)) {
-          if (it.type === 'good') { score += 1; TG?.HapticFeedback?.notificationOccurred?.('success'); }
-          else { score -= 1; TG?.HapticFeedback?.notificationOccurred?.('error'); }
-          items.splice(i,1);
-          scoreEl.textContent = 'Очки: ' + score;
-          continue;
-        }
+        if (hit(px, py, pw, ph, it.x, it.y, it.w, it.h)) {
+          if (it.type === 'good') { 
+              score += 1; 
+              TG?.HapticFeedback?.notificationOccurred?.('success'); 
+          } else { 
+              TG?.HapticFeedback?.notificationOccurred?.('error'); 
+              gameOver();
+          }
+    items.splice(i,1);
+    scoreEl.textContent = 'Очки: ' + score;
+    continue;
+}
+
         // удаляем ушедшие за экран
         if (it.x < -80) items.splice(i,1);
       }
@@ -254,6 +260,16 @@
       update(dt);
       draw();
       requestAnimationFrame(loop);
+    }
+
+    function gameOver() {
+      state = STATE.STOP;
+      ctx.fillStyle = 'rgba(0,0,0,0.6)';
+      ctx.fillRect(0,0,W,H);
+      ctx.fillStyle = '#fff';
+      ctx.font = '36px system-ui';
+      ctx.textAlign = 'center';
+      ctx.fillText('🐞 Баг! Игра окончена.', W/2, H/2);
     }
 
     // Отправка результата в Telegram
