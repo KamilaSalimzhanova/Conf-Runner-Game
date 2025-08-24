@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, user-scalable=no" />
+  <title>Conf Runner Game</title>
+  <style>
+    :root {
+      --bg: #f0f4f8;
+      --fg: #111827;
+      --card: #ffffff;
+      --line: #cbd5e1;
+      --accent: #2563eb;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, Arial;
+      background: var(--bg);
+      color: var(--fg);
+      display: grid;
+      place-items: center;
+      min-height: 100dvh;
+    }
+    .wrap { width: min(920px, 100vw); padding: 10px; }
+    .hud {
+      display: flex; gap: 8px; align-items: center; justify-content: space-between;
+      margin-bottom: 8px;
+    }
+    .badge {
+      background: var(--card); border: 1px solid var(--line);
+      padding: 8px 12px; border-radius: 12px; font-weight: 700;
+    }
+    .btn {
+      appearance: none; border: 1px solid var(--line); background: var(--card);
+      padding: 8px 12px; border-radius: 12px; cursor: pointer; font-weight: 700;
+    }
+    .btn:active { transform: translateY(1px); }
+    canvas {
+      width: 100%; height: auto;
+      background: linear-gradient(#fff, #eef3f8 60%);
+      border: 2px solid var(--fg); border-radius: 14px;
+      touch-action: manipulation;
+    }
+    .hint { margin-top: 8px; opacity: .7; font-size: 14px; }
+  </style>
+</head>
+<body>
+  <div class="wrap">
+    <div class="hud">
+      <div id="score" class="badge">Очки: 0</div>
+      <div style="display:flex; gap:8px;">
+        <button id="startBtn" class="btn">▶️ Старт</button>
+        <button id="pauseBtn" class="btn">⏸ Пауза</button>
+        <button id="sendBtn" class="btn">📤 Отправить результат</button>
+      </div>
+    </div>
+    <canvas id="game" width="900" height="380"></canvas>
+    <div class="hint">Управление: Space/↑ или ТАП/свайп вверх — прыжок. Собирай 🍪 ☕ 🍩 🍫 → +1. Баг 🐞 → −1. Игра ускоряется.</div>
+  </div>
+
+  <script>
+    // ========== Telegram Mini App bootstrap ==========
+    const TG = window.Telegram?.WebApp;
+    if (TG) {
+      try {
+        TG.ready();
+        TG.expand();
+        const tp = TG.themeParams || {};
+        if (tp.bg_color) document.body.style.background = tp.bg_color;
+      } catch (e) {}
+    }
+
+    // ========== Canvas & World ==========
+    const canvas = document.getElementById('game');
+    const ctx = canvas.getContext('2d');
+    const W = canvas.width, H = canvas.height;
+    const groundY = H - 36;
+
+    // HUD
+    const scoreEl = document.getElementById('score');
+    const startBtn = document.getElementById('startBtn');
+    const pauseBtn = document.getElementById('pauseBtn');
+    const sendBtn  = document.getElementById('sendBtn');
+
+    // Runner image
+    const runnerImg = new Image();
+    runnerImg.src = 'assets/runner.png';
+
+    // Game state
+    const STATE = { STOP: 0, RUN: 1, PAUSE: 2 };
+    let state = STATE.STOP;
+    let score = 0;
+    let lastTime = 0;
+
+    // Runner (персонаж)
+    const runner = {
+      x: 90,
+      y: groundY - 84,
+      w: 84,
+      h: 84,
+      vy: 0,
+      gravity: 0.95,
+      jumpForce: -18,
+      onGround: true,
+      bobT: 0 // "покачивание" при беге
+    };
+
+    // Мир/сложность
+    const world = {
+      speed: 6,          // базовая скорость
+      accel: 0.0009,     // ускорение px/ms^2
+      spawnEvery: 1000,  // интервал спавна (мс)
+      minSpawn: 520,
+      lastSpawn: 0,
+      time: 0
+    };
+
+    // Объекты
+    const goodies = ['🍪','☕','🍩','🍫','🥐','🧃','🎧','🍬'];
+    const items = []; // {type:'good'|'bug', x,y,w,h, emoji}
+
+    function spawnItem() {
+      const isBug = Math.random() < 0.42; // чаще баги на скорости
+      const size = isBug ? 34 : 30;
+      // вкусняшки иногда повыше, чтобы прыгать за ними
+      const y = isBug ? (groundY - size) : (Math.random() < 0.6 ? groundY - size - 24 : groundY - size - 110);
+
+      items.push({
+        type: isBug ? 'bug' : 'good',
+        emoji: isBug ? '🐞' : goodies[(Math.random()*goodies.length)|0],
+        x: W + 20,
+        y,
+        w: size,
+        h: size
+      });
+    }
+
+    // Управление
+    function jump() {
+      if (state !== STATE.RUN) return;
+      if (runner.onGround) {
+        runner.vy = runner.jumpForce;
+        runner.onGround = false;
+        TG?.HapticFeedback?.impactOccurred?.('light');
+      }
+    }
+    document.addEventListener('keydown', e => {
+      if (e.code === 'Space' || e.code === 'ArrowUp') { e.preventDefault(); jump(); }
+    });
+    // жесты (тап/свайп вверх)
+    let touchStartY = 0, touchStartX = 0;
+    canvas.addEventListener('touchstart', (e) => {
+      const t = e.changedTouches[0];
+      touchStartY = t.clientY; touchStartX = t.clientX;
+    }, {passive:true});
+    canvas.addEventListener('touchend', (e) => {
+      const t = e.changedTouches[0];
+      const dy = t.clientY - touchStartY;
+      const dx = t.clientX - touchStartX;
+      if (Math.abs(dy) < 30 && Math.abs(dx) < 30) jump();      // тап
+      else if (dy < -30 && Math.abs(dy) > Math.abs(dx)) jump(); // свайп вверх
+    }, {passive:true});
+
+    // Кнопки
+    startBtn.onclick = () => { if (state !== STATE.RUN) { state = STATE.RUN; lastTime = performance.now(); requestAnimationFrame(loop); } };
+    pauseBtn.onclick = () => { if (state === STATE.RUN) state = STATE.PAUSE; else if (state === STATE.PAUSE) { state = STATE.RUN; lastTime = performance.now(); requestAnimationFrame(loop); } };
+    sendBtn.onclick  = () => sendScore(score);
+
+    // Столкновения (AABB)
+    function hit(ax,ay,aw,ah,bx,by,bw,bh) {
+      return ax < bx + bw && ax + aw > bx && ay < by + bh && ay + ah > by;
+    }
+
+    // Обновление
+    function update(dt) {
+      world.time += dt;
+      world.speed += world.accel * dt;
+      if (world.spawnEvery > world.minSpawn) world.spawnEvery -= 0.006 * dt;
+
+      // Спавн
+      if (world.time - world.lastSpawn > world.spawnEvery) {
+        spawnItem(); world.lastSpawn = world.time;
+      }
+
+      // Физика персонажа
+      runner.y += runner.vy;
+      if (!runner.onGround) runner.vy += runner.gravity;
+      if (runner.y >= groundY - runner.h) {
+        runner.y = groundY - runner.h; runner.vy = 0; runner.onGround = true;
+      }
+
+      // "покачивание" при беге (просто визуальный твик)
+      runner.bobT += dt * 0.01;
+
+      // Движение предметов + столкновения
+      for (let i = items.length - 1; i >= 0; i--) {
+        const it = items[i];
+        it.x -= world.speed;
+
+        // Столкновение с хитбоксом игрока (немного уже, чтобы честнее)
+        const px = runner.x + 10, py = runner.y + 6, pw = runner.w - 20, ph = runner.h - 10;
+        if (hit(px,py,pw,ph, it.x,it.y,it.w,it.h)) {
+          if (it.type === 'good') { score += 1; TG?.HapticFeedback?.notificationOccurred?.('success'); }
+          else { score -= 1; TG?.HapticFeedback?.notificationOccurred?.('error'); }
+          items.splice(i,1);
+          scoreEl.textContent = 'Очки: ' + score;
+          continue;
+        }
+        // удаляем ушедшие за экран
+        if (it.x < -80) items.splice(i,1);
+      }
+    }
+
+    // Рендер
+    function draw() {
+      ctx.clearRect(0,0,W,H);
+
+      // фоновые полосы
+      ctx.globalAlpha = 0.06;
+      for (let i=0;i<H;i+=24){ ctx.fillStyle = i%48===0 ? '#64748b' : '#334155'; ctx.fillRect(0,i,W,24); }
+      ctx.globalAlpha = 1;
+
+      // земля
+      ctx.strokeStyle = '#0f172a'; ctx.lineWidth = 2;
+      ctx.beginPath(); ctx.moveTo(0, groundY); ctx.lineTo(W, groundY); ctx.stroke();
+
+      // дорожная разметка
+      ctx.globalAlpha = 0.15;
+      for (let i=0;i<W;i+=40){ ctx.fillStyle = '#0f172a'; ctx.fillRect(i, groundY+10, 24, 4); }
+      ctx.globalAlpha = 1;
+
+      // предметы
+      ctx.font = '28px system-ui, serif';
+      for (const it of items) {
+        ctx.fillText(it.emoji, it.x, it.y + it.h - 4);
+        if (it.type === 'bug') {
+          ctx.globalAlpha = 0.08; ctx.fillStyle = '#ef4444';
+          ctx.fillRect(it.x, it.y, it.w, it.h);
+          ctx.globalAlpha = 1;
+        }
+      }
+
+      // игрок (с лёгким покачиванием по синусу)
+      const bob = Math.sin(runner.bobT) * (runner.onGround ? 1.5 : 0);
+      ctx.drawImage(runnerImg, runner.x, runner.y + bob, runner.w, runner.h);
+    }
+
+    // Главный цикл
+    function loop(now) {
+      if (state !== STATE.RUN) return;
+      const dt = Math.min(50, now - lastTime);
+      lastTime = now;
+      update(dt);
+      draw();
+      requestAnimationFrame(loop);
+    }
+
+    // Отправка результата в Telegram
+    function sendScore(value) {
+      if (!TG) { alert('Score: ' + value); return; }
+      try {
+        TG.HapticFeedback?.impactOccurred?.('medium');
+        TG.sendData(JSON.stringify({ game: 'conf_runner', score: value, ts: Date.now() }));
+        // TG.close(); // можно закрыть веб-апп после отправки
+      } catch (e) {}
+    }
+
+    // Автостарт после загрузки картинки
+    runnerImg.onload = () => { scoreEl.textContent = 'Очки: ' + score; };
+  </script>
+</body>
+</html>
