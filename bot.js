@@ -1,8 +1,8 @@
 require("dotenv").config();
 const { Telegraf, Markup } = require("telegraf");
 
-const BOT_TOKEN = process.env.BOT_TOKEN;
-const WEBAPP_URL = "https://kamilasalimzhanova.github.io/Conf-Runner-Game/";
+const BOT_TOKEN = process.env.BOT_TOKEN; // Render сам подставит сюда
+const WEBAPP_URL = "https://kamilasalimzhanova.github.io/Conf-Runner-Game/"; // фронтенд на GitHub Pages
 
 const bot = new Telegraf(BOT_TOKEN);
 
@@ -17,3 +17,6 @@ bot.start((ctx) => {
 
 bot.launch();
 console.log("🤖 Bot started");
+
+//👉 API для очков (/score, /leaders) будет работать через Render.
+// 👉 Но саму игру ты открываешь с GitHub Pages.
