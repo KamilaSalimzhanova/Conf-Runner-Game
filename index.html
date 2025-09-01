@@ -9,7 +9,6 @@
       margin: 0;
       overflow: hidden;
       font-family: Arial, sans-serif;
-      text-align: center;
       background: #000;
     }
     #menu {
@@ -19,6 +18,7 @@
       justify-content: center;
       height: 100vh;
       background: #f4f4f4;
+      text-align: center;
     }
     #gameCanvas {
       display: none;
@@ -26,24 +26,17 @@
       height: 100vh;
       background: black;
     }
-
-    /* Если телефон в портретной ориентации */
-    @media screen and (orientation: portrait) {
-      body::before {
-        content: "📱 Пожалуйста, поверни телефон горизонтально для игры";
-        position: fixed;
-        inset: 0;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        background: white;
-        font-size: 22px;
-        font-weight: bold;
-        z-index: 9999;
-        text-align: center;
-        padding: 20px;
-      }
+    h1 { color: #333; }
+    button {
+      font-size: 20px;
+      padding: 15px 30px;
+      border: none;
+      border-radius: 10px;
+      background: #4CAF50;
+      color: white;
+      cursor: pointer;
     }
+    button:hover { background: #45a049; }
   </style>
 </head>
 <body>
@@ -61,8 +54,12 @@
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
 
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
+    function resizeCanvas() {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    }
+    window.addEventListener("resize", resizeCanvas);
+    resizeCanvas();
 
     let bgImage = new Image();
     bgImage.src = "assets/background_variant_4.jpg"; // 👈 твой фон
@@ -74,7 +71,7 @@
       ctx.drawImage(bgImage, bgX + canvas.width, 0, canvas.width, canvas.height);
 
       // сдвигаем влево
-      bgX -= 2; 
+      bgX -= 1; 
       if (bgX <= -canvas.width) {
         bgX = 0;
       }
