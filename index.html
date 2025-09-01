@@ -5,89 +5,69 @@
   <title>Kolesa Conf Game</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <style>
-    body {
+    body, html {
       margin: 0;
+      padding: 0;
       overflow: hidden;
-      font-family: Arial, sans-serif;
       background: #000;
     }
-    #menu {
-      display: flex;
-      flex-direction: column;
-      align-items: center;
-      justify-content: center;
-      height: 100vh;
-      background: #f4f4f4;
-      text-align: center;
+    canvas {
+      display: block;
     }
-    #gameCanvas {
-      display: none;
-      width: 100vw;
-      height: 100vh;
-      background: black;
-    }
-    h1 { color: #333; }
-    button {
-      font-size: 20px;
-      padding: 15px 30px;
-      border: none;
-      border-radius: 10px;
-      background: #4CAF50;
-      color: white;
-      cursor: pointer;
-    }
-    button:hover { background: #45a049; }
   </style>
 </head>
 <body>
-  <div id="menu">
-    <h1>🎮 Kolesa Conf Game</h1>
-    <p>Это базовый шаблон Mini App</p>
-    <button id="startBtn">Играть</button>
-  </div>
-
   <canvas id="gameCanvas"></canvas>
 
   <script>
-    const startBtn = document.getElementById("startBtn");
-    const menu = document.getElementById("menu");
     const canvas = document.getElementById("gameCanvas");
     const ctx = canvas.getContext("2d");
 
-    function resizeCanvas() {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    }
-    window.addEventListener("resize", resizeCanvas);
-    resizeCanvas();
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
 
-    let bgImage = new Image();
-    bgImage.src = "assets/background_variant_4.jpg"; // 👈 твой фон
+    // фон
+    const bgImage = new Image();
+    bgImage.src = "assets/background_variant_4.jpg";
+
+    // персонаж
+    const runner = new Image();
+    runner.src = "assets/runner.png";
+
     let bgX = 0;
+    const bgSpeed = 1; // скорость движения фона
+
+    const runnerWidth = 150;
+    const runnerHeight = 150;
+    const runnerX = 100; // фиксированная позиция по X
+    const runnerY = canvas.height - runnerHeight - 50; // ставим на "землю"
 
     function drawBackground() {
-      // рисуем два раза подряд для бесконечного эффекта
       ctx.drawImage(bgImage, bgX, 0, canvas.width, canvas.height);
       ctx.drawImage(bgImage, bgX + canvas.width, 0, canvas.width, canvas.height);
 
-      // сдвигаем влево
-      bgX -= 1; 
+      bgX -= bgSpeed;
       if (bgX <= -canvas.width) {
         bgX = 0;
       }
     }
 
+    function drawRunner() {
+      ctx.drawImage(runner, runnerX, runnerY, runnerWidth, runnerHeight);
+    }
+
     function gameLoop() {
       ctx.clearRect(0, 0, canvas.width, canvas.height);
       drawBackground();
+      drawRunner();
       requestAnimationFrame(gameLoop);
     }
 
-    startBtn.addEventListener("click", () => {
-      menu.style.display = "none";   // убираем меню
-      canvas.style.display = "block"; // показываем игру
-      gameLoop();                     // запускаем анимацию
-    });
+    bgImage.onload = () => {
+      runner.onload = () => {
+        gameLoop();
+      };
+    };
   </script>
 </body>
 </html>
