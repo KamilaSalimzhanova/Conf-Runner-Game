@@ -6,23 +6,26 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
   <style>
     body {
+      margin: 0;
+      overflow: hidden;
       font-family: Arial, sans-serif;
       text-align: center;
-      padding: 50px;
+      background: #000;
+    }
+    #menu {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      height: 100vh;
       background: #f4f4f4;
-      margin: 0;
     }
-    h1 { color: #333; }
-    button {
-      font-size: 20px;
-      padding: 15px 30px;
-      border: none;
-      border-radius: 10px;
-      background: #4CAF50;
-      color: white;
-      cursor: pointer;
+    #gameCanvas {
+      display: none;
+      width: 100vw;
+      height: 100vh;
+      background: black;
     }
-    button:hover { background: #45a049; }
 
     /* Если телефон в портретной ориентации */
     @media screen and (orientation: portrait) {
@@ -44,8 +47,50 @@
   </style>
 </head>
 <body>
-  <h1>🎮 Kolesa Conf Game</h1>
-  <p>Это базовый шаблон Mini App</p>
-  <button onclick="alert('Игра скоро будет!')">Играть</button>
+  <div id="menu">
+    <h1>🎮 Kolesa Conf Game</h1>
+    <p>Это базовый шаблон Mini App</p>
+    <button id="startBtn">Играть</button>
+  </div>
+
+  <canvas id="gameCanvas"></canvas>
+
+  <script>
+    const startBtn = document.getElementById("startBtn");
+    const menu = document.getElementById("menu");
+    const canvas = document.getElementById("gameCanvas");
+    const ctx = canvas.getContext("2d");
+
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    let bgImage = new Image();
+    bgImage.src = "assets/background_variant_4.jpg"; // 👈 твой фон
+    let bgX = 0;
+
+    function drawBackground() {
+      // рисуем два раза подряд для бесконечного эффекта
+      ctx.drawImage(bgImage, bgX, 0, canvas.width, canvas.height);
+      ctx.drawImage(bgImage, bgX + canvas.width, 0, canvas.width, canvas.height);
+
+      // сдвигаем влево
+      bgX -= 2; 
+      if (bgX <= -canvas.width) {
+        bgX = 0;
+      }
+    }
+
+    function gameLoop() {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      drawBackground();
+      requestAnimationFrame(gameLoop);
+    }
+
+    startBtn.addEventListener("click", () => {
+      menu.style.display = "none";   // убираем меню
+      canvas.style.display = "block"; // показываем игру
+      gameLoop();                     // запускаем анимацию
+    });
+  </script>
 </body>
 </html>
